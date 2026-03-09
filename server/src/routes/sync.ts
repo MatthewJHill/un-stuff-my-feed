@@ -1,7 +1,16 @@
 import { Router } from "express";
-import { randomUUID } from "crypto";
 import type BetterSqlite3 from "better-sqlite3";
-import type { ExtensionSyncPayload, NormalizedUser, NormalizedPost } from "@usmf/shared";
+import type { ExtensionSyncPayload, NormalizedUser, NormalizedPost, Platform } from "@usmf/shared";
+
+function makeAccountId(platform: Platform, platformUserId: string): string {
+  return platform === "instagram" ? `ig:${platformUserId}` : `li:${platformUserId}`;
+}
+
+function makePostId(platform: Platform, platformPostId: string): string {
+  return platform === "instagram"
+    ? `ig:post_${platformPostId}`
+    : `li:activity_${platformPostId}`;
+}
 
 export function makeSyncRouter(db: BetterSqlite3.Database): Router {
   const router = Router();
@@ -26,15 +35,11 @@ export function makeSyncRouter(db: BetterSqlite3.Database): Router {
         BetterSqlite3.RunResult
       >(
         `INSERT INTO accounts (id, platform_id, platform_user_id, username, display_name, avatar_url, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, 1)
+         VALUES (?, ?, ?, ?, ?, ?, 0)
          ON CONFLICT(platform_id, platform_user_id) DO UPDATE SET
            username = excluded.username,
            display_name = excluded.display_name,
            avatar_url = excluded.avatar_url`
-      );
-
-      const getAccountId = db.prepare<[string, string], { id: string }>(
-        "SELECT id FROM accounts WHERE platform_id = ? AND platform_user_id = ?"
       );
 
       const upsertPost = db.prepare<
@@ -47,21 +52,21 @@ export function makeSyncRouter(db: BetterSqlite3.Database): Router {
       );
 
       const syncTx = db.transaction(() => {
-        let accountsUpserted = 0;
-        let postsUpserted = 0;
+        let accountsImported = 0;
+        let postsImported = 0;
 
         if (Array.isArray(following)) {
           for (const user of following as NormalizedUser[]) {
             if (!user.id || !user.username) continue;
             upsertAccount.run(
-              randomUUID(),
+              makeAccountId(platform, user.id),
               platform,
               user.id,
               user.username,
               user.displayName ?? null,
               user.profilePicUrl ?? null
             );
-            accountsUpserted++;
+            accountsImported++;
           }
         }
 
@@ -69,26 +74,20 @@ export function makeSyncRouter(db: BetterSqlite3.Database): Router {
           for (const post of posts as NormalizedPost[]) {
             if (!post.id || !post.author?.id) continue;
 
-            // Ensure the author account exists before inserting post
-            const existingAccount = getAccountId.get(platform, post.author.id);
-            let accountId: string;
+            const accountId = makeAccountId(platform, post.author.id);
 
-            if (existingAccount) {
-              accountId = existingAccount.id;
-            } else {
-              accountId = randomUUID();
-              upsertAccount.run(
-                accountId,
-                platform,
-                post.author.id,
-                post.author.username,
-                post.author.displayName ?? null,
-                post.author.profilePicUrl ?? null
-              );
-            }
+            // Ensure the author account exists before inserting post
+            upsertAccount.run(
+              accountId,
+              platform,
+              post.author.id,
+              post.author.username,
+              post.author.displayName ?? null,
+              post.author.profilePicUrl ?? null
+            );
 
             const result = upsertPost.run(
-              randomUUID(),
+              makePostId(platform, post.id),
               accountId,
               platform,
               post.id,
@@ -104,7 +103,7 @@ export function makeSyncRouter(db: BetterSqlite3.Database): Router {
               post.engagement?.shares ?? null
             );
 
-            if (result.changes > 0) postsUpserted++;
+            if (result.changes > 0) postsImported++;
           }
         }
 
@@ -113,11 +112,11 @@ export function makeSyncRouter(db: BetterSqlite3.Database): Router {
           "UPDATE platforms SET is_connected = 1, last_synced_at = datetime('now') WHERE id = ?"
         ).run(platform);
 
-        return { accountsUpserted, postsUpserted };
+        return { accountsImported, postsImported };
       });
 
       const stats = syncTx();
-      res.json({ ok: true, ...stats });
+      res.json(stats);
     } catch {
       res.status(500).json({ error: "Sync failed" });
     }
