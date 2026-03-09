@@ -1,6 +1,6 @@
-import db from "./connection.js";
+import type BetterSqlite3 from "better-sqlite3";
 
-export function initSchema(): void {
+export function initSchema(db: BetterSqlite3.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS platforms (
       id TEXT PRIMARY KEY,
@@ -37,6 +37,9 @@ export function initSchema(): void {
       original_url TEXT NOT NULL,
       posted_at TEXT NOT NULL,
       scraped_at TEXT DEFAULT (datetime('now')),
+      engagement_likes INTEGER NOT NULL DEFAULT 0,
+      engagement_comments INTEGER NOT NULL DEFAULT 0,
+      engagement_shares INTEGER,
       FOREIGN KEY (account_id) REFERENCES accounts(id),
       FOREIGN KEY (platform_id) REFERENCES platforms(id),
       UNIQUE(platform_id, platform_post_id)
