@@ -59,6 +59,12 @@ export interface SyncRequestPayload {
   accountId: string;
 }
 
+export interface ExtensionSyncPayload {
+  platform: Platform;
+  following?: NormalizedUser[];
+  posts?: NormalizedPost[];
+}
+
 // ── Extension messages ────────────────────────────────────────────────────────
 
 export type SyncCommandType = "START_SYNC" | "GET_STATUS" | "CANCEL_SYNC";
