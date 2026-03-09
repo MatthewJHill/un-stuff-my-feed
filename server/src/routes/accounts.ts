@@ -29,6 +29,7 @@ export function makeAccountsRouter(db: BetterSqlite3.Database): Router {
 
   router.get("/accounts", (req, res) => {
     const platform = req.query["platform"] as string | undefined;
+    const search = req.query["search"] as string | undefined;
 
     try {
       const whereClauses: string[] = [];
@@ -39,11 +40,16 @@ export function makeAccountsRouter(db: BetterSqlite3.Database): Router {
         params.push(platform);
       }
 
+      if (search) {
+        whereClauses.push("(username LIKE ? OR display_name LIKE ?)");
+        params.push(`%${search}%`, `%${search}%`);
+      }
+
       const where = whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : "";
 
       const rows = db
         .prepare<string[], AccountRow>(
-          `SELECT * FROM accounts ${where} ORDER BY username ASC`
+          `SELECT * FROM accounts ${where} ORDER BY COALESCE(display_name, username) ASC`
         )
         .all(...params);
 

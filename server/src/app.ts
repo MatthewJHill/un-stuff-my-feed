@@ -5,7 +5,7 @@ import { makeAccountsRouter } from "./routes/accounts.js";
 import { makeSyncRouter } from "./routes/sync.js";
 import { makePlatformsRouter } from "./routes/platforms.js";
 
-const ALLOWED_ORIGINS = ["http://localhost:5173"];
+const ALLOWED_ORIGINS = ["http://localhost:5173", "http://localhost:3001"];
 
 function corsMiddleware(req: Request, res: Response, next: NextFunction): void {
   const origin = req.headers.origin;
@@ -29,7 +29,7 @@ function corsMiddleware(req: Request, res: Response, next: NextFunction): void {
 export function createApp(db: BetterSqlite3.Database): express.Application {
   const app = express();
 
-  app.use(express.json());
+  app.use(express.json({ limit: "1mb" }));
   app.use(corsMiddleware);
 
   app.get("/api/health", (_req, res) => {
@@ -40,6 +40,18 @@ export function createApp(db: BetterSqlite3.Database): express.Application {
   app.use("/api", makeAccountsRouter(db));
   app.use("/api", makeSyncRouter(db));
   app.use("/api", makePlatformsRouter(db));
+
+  // 404 handler
+  app.use((_req, res) => {
+    res.status(404).json({ error: "Not found" });
+  });
+
+  // 500 error handler
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  });
 
   return app;
 }
