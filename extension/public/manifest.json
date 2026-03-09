@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Un-Stuff My Feed",
+  "version": "1.0.0",
+  "description": "Unfollow accounts cluttering your social media feeds",
+  "permissions": ["storage", "tabs"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Un-Stuff My Feed"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}
