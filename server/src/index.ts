@@ -1,4 +1,7 @@
 import express from "express";
+import { initSchema } from "./db/schema.js";
+
+initSchema();
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
